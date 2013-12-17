@@ -5,11 +5,14 @@
 
 import copy
 import logging
-from torext import errors
 from bson.objectid import ObjectId
 from pymongo.collection import Collection
-from .dstruct import StructuredDict
-from .cursor import Cursor, PymongoCursor
+from . import errors
+from .dstruct import StructuredDict, check_struct
+from .cursor import SimplemongoCursor, Cursor
+
+
+# TODO replace logging to certain logger
 
 
 def oid(id):
@@ -31,9 +34,13 @@ class DocumentMetaclass(type):
         # judge if the target class is Document
         if not (len(bases) == 1 and bases[0] is StructuredDict):
             if not ('col' in attrs and isinstance(attrs['col'], Collection)):
-                raise errors.ConnectionError(
-                    'col of a Document is not set properly, passing: %s %s' %
+                raise errors.DefinitionError(
+                    'col of a Document is not set properly, received: %s %s' %
                     (attrs['col'], type(attrs['col'])))
+
+            struct = attrs.get('struct')
+            if struct:
+                check_struct(struct)
 
         return type.__new__(cls, name, bases, attrs)
 
@@ -56,6 +63,11 @@ class Document(StructuredDict):
     __metaclass__ = DocumentMetaclass
 
     __safe_operation__ = True
+
+    __write_concern__ = {
+        'w': 1,
+        'j': False
+    }
 
     __validate__ = True
 
@@ -81,58 +93,58 @@ class Document(StructuredDict):
     def identifier(self):
         return {'_id': self['_id']}
 
-    def _get_operate_options(self, **kwgs):
-        options = {
-            'w': self.__class__.__safe_operation__ and 1 or 0
-        }
+    def _get_write_options(self, **kwgs):
+        options = self.__class__.__write_concern__.copy()
         options.update(kwgs)
         return options
 
     def save(self):
         if self.__class__.__validate__:
-            logging.debug('VALIDATING MODEL')
+            logging.debug('__validate__ is on')
             self.validate()
-        rv = self.col.save(self, **self._get_operate_options(manipulate=True))
-        logging.debug('torext.models: ObjectId(%s) saved' % rv)
+        rv = self.col.save(self, **self._get_write_options(manipulate=True))
+        logging.debug('ObjectId(%s) saved' % rv)
         self._in_db = True
         return rv
 
     def remove(self):
-        assert self._in_db, 'could not remove document which is not in database'
+        assert self._in_db, 'Could not remove document which is not in database'
         self._history = self.copy()
         _id = self['_id']
-        self.col.remove(_id, **self._get_operate_options())
-        logging.debug('torext.models: %s removed' % self)
-        self = Document()
+        self.col.remove(_id, **self._get_write_options())
+        logging.debug('%s removed' % _id)
+        self.clear()
+        self._in_db = False
 
-    def update_doc(self, spec, **kwgs):
-        #options = self._get_operate_options(**kwgs)
-        #print self.identifier, options
-        rv = self.col.update(self.identifier, spec, **self._get_operate_options(**kwgs))
+    def update_doc(self, spec, **kwargs):
+        rv = self.col.update(
+            self.identifier, spec, **self._get_write_options(**kwargs))
         return rv
 
     def pull(self):
-        cursor = PymongoCursor(self.col, self.identifier)
+        """Update document from database
+        """
+        cursor = Cursor(self.col, self.identifier)
         try:
             doc = cursor.next()
         except StopIteration:
-            raise Exception('Document was deleted before `pull` was called')
+            raise errors.SimplemongoException('Document was deleted before `pull` was called')
         self.clear()
         self.update(doc)
 
     @classmethod
-    def new(cls, **kwgs):
+    def new(cls, **kwargs):
         """
         initialize by structure of self.struct
         """
-        instance = cls.build_instance(**kwgs)
+        instance = cls.build_instance(**kwargs)
         instance['_id'] = ObjectId()
-        logging.debug('torext.models: _id generated %s' % instance['_id'])
+        logging.debug('_id generated %s' % instance['_id'])
         return instance
 
     @classmethod
     def find(cls, *args, **kwargs):
-        # copy from ``find`` in pymongo==2.5, this method should be mostly the same as it
+        # Copy from ``find`` in pymongo==2.6, this method should be mostly the same as it
         if not 'slave_okay' in kwargs:
             kwargs['slave_okay'] = cls.col.slave_okay
         if not 'read_preference' in kwargs:
@@ -143,37 +155,21 @@ class Document(StructuredDict):
             kwargs['secondary_acceptable_latency_ms'] = (
                 cls.col.secondary_acceptable_latency_ms)
 
-        kwargs['wrap'] = cls
-        cursor = Cursor(cls.col, *args, **kwargs)
+        kwargs['wrapper'] = cls
+        cursor = SimplemongoCursor(cls.col, *args, **kwargs)
         return cursor
 
     @classmethod
-    def exist(cls, *args, **kwgs):
-        """
-        just do the same query as 'find', but will return None if nothing in the cursor.
-        """
-        cursor = cls.find(*args, **kwgs)
-        if cursor.count() == 0:
-            return None
-        return cursor
+    def one(cls, spec_or_id, allow_multiple=False, *args, **kwargs):
+        if spec_or_id is not None and not isinstance(spec_or_id, dict):
+            spec_or_id = {"_id": spec_or_id}
 
-    @classmethod
-    def one(cls, *args, **kwgs):
-        cursor = cls.find(*args, **kwgs)
-        count = cursor.count()
-        if count == 0:
-            raise errors.ObjectNotFound('query dict: ' + repr(args[0]))
-        if count > 1:
-            raise errors.MultipleObjectsReturned('multi results found in Document.one,\
-                    query dict: ' + repr(args[0]))
-        return cursor.next()
-
-    @classmethod
-    def by__id(cls, id):
-        assert isinstance(id, ObjectId), 'You must use ObjectId object in by_oid() method'
-        return cls.one({'_id': id})
-
-    @classmethod
-    def by__id_str(cls, id_str):
-        id = ObjectId(id_str)
-        return cls.one({'_id': id})
+        cursor = cls.find(spec_or_id, *args, **kwargs)
+        if not allow_multiple:
+            count = cursor.count()
+            if count > 1:
+                raise errors.MultipleObjectsReturned(
+                    'Got multiple(%s) results in query %s' % (count, spec_or_id))
+        for doc in cursor:
+            return doc
+        return None

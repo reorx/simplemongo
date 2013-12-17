@@ -2,16 +2,13 @@
 # -*- coding: utf-8 -*-
 
 
-class ConnectionError(TorextException):
-    """
-    error occurs in connection
-    """
+class SimplemongoException(Exception):
     pass
 
 
-class ObjectNotFound(TorextException):
+class ObjectNotFound(SimplemongoException):
     pass
 
 
-class MultipleObjectsReturned(TorextException):
+class MultipleObjectsReturned(SimplemongoException):
     pass
