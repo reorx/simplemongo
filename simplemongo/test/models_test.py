@@ -3,9 +3,9 @@
 
 import unittest
 from nose.tools import *
-from torext.mongodb import Document, Struct, ObjectId, StructDefineError
-from torext.errors import ValidationError, ObjectNotFound, MultipleObjectsReturned
 from pymongo import Connection
+from simplemongo.models import Document, Struct, ObjectId, StructDefineError
+from simplemongo.errors import ObjectNotFound, MultipleObjectsReturned
 
 
 _FAKE_DATA = {
@@ -31,7 +31,7 @@ fake_data = lambda: _FAKE_DATA.copy()
 class ModelTest(unittest.TestCase):
 
     def setUp(self):
-        db = Connection('mongodb://localhost')['torext']
+        db = Connection('mongodb://localhost')['_simplemongo_test']
 
         class User(Document):
             col = db['user']
@@ -84,7 +84,7 @@ class ModelTest(unittest.TestCase):
                 })
 
     def test_new_and_gen(self):
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(TypeError):
             self.Model.new(magic=self.Model.gen.magic(camp=1))
 
         u = self.Model.new(

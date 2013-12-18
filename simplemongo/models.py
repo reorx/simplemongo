@@ -34,7 +34,7 @@ class DocumentMetaclass(type):
         # judge if the target class is Document
         if not (len(bases) == 1 and bases[0] is StructuredDict):
             if not ('col' in attrs and isinstance(attrs['col'], Collection)):
-                raise errors.DefinitionError(
+                raise errors.StructError(
                     'col of a Document is not set properly, received: %s %s' %
                     (attrs['col'], type(attrs['col'])))
 

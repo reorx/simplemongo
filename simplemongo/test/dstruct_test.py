@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import unittest
+# import unittest
+from nose.tools import assert_raises
 import datetime
 import copy
 
-from torext.mongodb.dstruct import (
+from simplemongo.dstruct import (
     check_struct,
     build_dict,
     retrieve_dict,
@@ -14,10 +15,9 @@ from torext.mongodb.dstruct import (
     StructuredDict,
     Struct,
     ObjectId,
-    ValidationError,
     validate_dict,
-    StructDefineError,
 )
+from simplemongo.errors import StructError
 
 
 STRUCT_SAMPLE = {
@@ -68,35 +68,37 @@ DICT_SAMPLE = {
 }
 
 
-class UtilitiesTest(unittest.TestCase):
-    def setUp(self):
-        pass
-
-    def s(self, **kwgs):
+class FunctionsTest(object):
+    def s(self, **kwargs):
         d = copy.deepcopy(STRUCT_SAMPLE)
-        d.update(kwgs)
+        d.update(kwargs)
         return d
 
-    def d(self, **kwgs):
+    def d(self, **kwargs):
         d = copy.deepcopy(DICT_SAMPLE)
-        d.update(kwgs)
+        d.update(kwargs)
         return d
 
     def test_check_struct(self):
         check_struct(self.s())
-        with self.assertRaises(StructDefineError):
+
+        with assert_raises(StructError):
             check_struct(self.s(name='hello'))
-        with self.assertRaises(StructDefineError):
+
+        with assert_raises(StructError):
             check_struct(self.s(people=['me']))
-        with self.assertRaises(StructDefineError):
+
+        with assert_raises(StructError):
             d = self.s()
             d['nature']['luck'] = 9
             check_struct(d)
-        with self.assertRaises(StructDefineError):
+
+        with assert_raises(StructError):
             d = self.s()
             d['disks'][0]['volums'][0]['block'][0] = 1024
             check_struct(d)
-        with self.assertRaises(StructDefineError):
+
+        with assert_raises(StructError):
             d = self.s()
             d['disks'][0]['volums'][0]['name'] = 'C'
             check_struct(d)
@@ -109,12 +111,12 @@ class UtilitiesTest(unittest.TestCase):
 
         # wrong type
         d = self.d(id=1)
-        with self.assertRaises(ValidationError):
+        with assert_raises(TypeError):
             validate_dict(d, self.s())
 
         # None
         d = self.d(name=None)
-        with self.assertRaises(ValidationError):
+        with assert_raises(TypeError):
             validate_dict(d, self.s())
 
     def test_validate_dict_more_less(self):
@@ -130,12 +132,12 @@ class UtilitiesTest(unittest.TestCase):
 
         # less
         del d['disks'][0]['volums'][0]['size']
-        with self.assertRaises(ValidationError):
+        with assert_raises(TypeError):
             validate_dict(d, self.s())
 
     def test_validate_dict_allow_None_types(self):
         d = self.d(name=None)
-        with self.assertRaises(ValidationError):
+        with assert_raises(TypeError):
             validate_dict(d, self.s())
 
         validate_dict(d, self.s(), allow_None_types=[str])
@@ -143,7 +145,7 @@ class UtilitiesTest(unittest.TestCase):
     def test_validate_dict_brother_types(self):
         d = self.d()
         d['nature']['luck'] = float(3.14159)
-        with self.assertRaises(ValidationError):
+        with assert_raises(TypeError):
             validate_dict(d, self.s(), allow_None_types=[str])
 
         validate_dict(d, self.s(), allow_None_types=[str], brother_types=[(int, float)])
@@ -190,7 +192,7 @@ class UtilitiesTest(unittest.TestCase):
         assert hash_dict(d3) == hash_before
 
 
-class StructedDictTest(unittest.TestCase):
+class StructedDictTest(object):
     def setUp(self):
         class UserDict(StructuredDict):
             struct = Struct({
@@ -236,7 +238,7 @@ class StructedDictTest(unittest.TestCase):
         del d['id']
         assert hash_dict(ins) == hash_dict(d)
 
-        with self.assertRaises(ValidationError):
+        with assert_raises(TypeError):
             ins = self.S.build_instance(name=1)
 
         ins = self.S.build_instance(

@@ -5,8 +5,8 @@ import copy
 import logging
 import datetime
 from hashlib import md5
-from torext.errors import ValidationError
 from bson.objectid import ObjectId
+from .errors import StructError
 
 
 logger = logging.getLogger('torext.mongodb')
@@ -40,7 +40,7 @@ def check_struct(struct):
     for k, v in struct.iteritems():
         # check key to be str
         if not isinstance(k, str):
-            raise StructDefineError('key "%s" is not a str' % k)
+            raise StructError('key "%s" is not a str' % k)
 
         # NOTE isinstance(dict, dict) is False
         if isinstance(v, dict):
@@ -48,21 +48,21 @@ def check_struct(struct):
 
         elif isinstance(v, list):
             if len(v) > 1:
-                raise StructDefineError('value "%s" can at most contains one item' % v)
+                raise StructError('value "%s" can at most contains one item' % v)
             elif len(v) == 1:
                 v_item = v[0]
                 if isinstance(v_item, dict):
                     check_struct(v_item)
                 else:
                     if not v_item in Struct.ALLOW_TYPES:
-                        raise StructDefineError('value "%s" in list '
+                        raise StructError('value "%s" in list '
                                                 'is neither one of Struct.ALLOW_TYPES '
                                                 'nor instance of dict' % v_item)
 
         # check value to be type in `ALLOW_TYPES` if not instance of dict or list
         else:
             if not v in Struct.ALLOW_TYPES:
-                raise StructDefineError('value "%s" is not one of Struct.ALLOW_TYPES' % v)
+                raise StructError('value "%s" is not one of Struct.ALLOW_TYPES' % v)
 
 
 def validate_dict(doc, struct, allow_None_types=[], brother_types=[]):
@@ -100,8 +100,8 @@ def validate_dict(doc, struct, allow_None_types=[], brother_types=[]):
     >>> validate_dict(doc, struct)
 
     Traceback (most recent call last):
-        raise ValidationError('%s: key %s not in %s' % (ck, k, o))
-    torext.errors.ValidationError: $.b.[0]: key d not in {'c': 0}
+        raise TypeError('%s: key %s not in %s' % (ck, k, o))
+    TypeError: $.b.[0]: key d not in {'c': 0}
 
     Because we don't see if every key in `doc` is in `struct` reversely,
     this example will just pass:
@@ -164,7 +164,7 @@ def validate_dict(doc, struct, allow_None_types=[], brother_types=[]):
                         break
 
             if not _pass:
-                raise ValidationError(
+                raise TypeError(
                     'Position(%s): type "%s" should be "%s", value: "%s"' % (ck, type(o), typ, o))
 
         logger.debug('---')
@@ -173,7 +173,7 @@ def validate_dict(doc, struct, allow_None_types=[], brother_types=[]):
         if isinstance(st, dict):
             for k, nst in st.iteritems():
                 if not k in o:
-                    raise ValidationError('Position(%s): key "%s" not in "%s"' % ((ck is None) or '*TOP*', k, o))
+                    raise TypeError('Position(%s): key "%s" not in "%s"' % ((ck is None) or '*TOP*', k, o))
                 if ck is None:
                     nk = k
                 else:
@@ -358,10 +358,6 @@ class Gen(object):
         else:
             self.__dot_key += '.' + key
         return self
-
-
-class StructDefineError(Exception):
-    pass
 
 
 class Struct(object):

@@ -6,6 +6,10 @@ class SimplemongoException(Exception):
     pass
 
 
+class StructError(Exception):
+    pass
+
+
 class ObjectNotFound(SimplemongoException):
     pass
 
