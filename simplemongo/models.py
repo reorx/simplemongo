@@ -31,6 +31,11 @@ class DocumentMetaclass(type):
     use for judging if Document's subclasses have assign attribute 'col' properly
     """
     def __new__(cls, name, bases, attrs):
+
+        # Repeat code in dstruct.StructuredDictMetaclass.__new__
+        if 'struct' in attrs:
+            check_struct(attrs['struct'])
+
         # judge if the target class is Document
         if not (len(bases) == 1 and bases[0] is StructuredDict):
             if not ('col' in attrs and isinstance(attrs['col'], Collection)):
@@ -50,6 +55,35 @@ class Document(StructuredDict):
 
     Acturally, a Document is a representation of one certaion collectino which store
     data in structure of the Document, they two are of one-to-one relation
+
+    By default all the fields in struct are not required to **exist**
+    if exist, None value is allowed
+    there are two lists to mark field option
+    1. required_fields
+       a field in required fields must exist in doc, despite it value type
+    2. strict_fields
+       a field in strict_fields must be exactly the type defined in struct,
+       that means, could not be None (the only exception is defined type is None)
+    So there are 4 situations for a field:
+    1. not required and not strict
+       it can be:
+       - not exist
+       - exist and value is instance of type
+       - exist and value is None
+    2. required and not strict
+       it can be:
+       - exist and value is instance of type
+       - exist and value is None
+    3. not required and strict
+       it can be:
+       - not exist
+       - exist and value is instance of type
+    4. required and strict
+       it can only be:
+       - exist and value is instance of type
+    Additionally, a field that is not defined in struct will not be handled,
+    no matter what value it is. a list to restrict fields that can't be exist
+    is not considered to be implemented currently.
 
     Usage:
     1. create new document

@@ -68,7 +68,7 @@ DICT_SAMPLE = {
 }
 
 
-class FunctionsTest(object):
+class TestFunctions(object):
     def s(self, **kwargs):
         d = copy.deepcopy(STRUCT_SAMPLE)
         d.update(kwargs)
@@ -152,13 +152,17 @@ class FunctionsTest(object):
 
     # require validate_dict
     def test_build_dict(self):
-        d1 = build_dict(self.s(), extra=1.11)
+        d1 = build_dict(self.s(), {
+            'nature.luck': 1
+        })
         print d1
         validate_dict(d1, self.s())
 
-        d2 = build_dict(self.s())
-
-        assert str(d1['id']) != str(d2['id'])
+        d2 = build_dict(self.s(), {
+            'nature.luck': 2
+        })
+        print d2
+        assert d1['nature']['luck'] != d2['nature']['luck']
 
     def test_retrieve_dict(self):
         d = self.d()
@@ -192,7 +196,7 @@ class FunctionsTest(object):
         assert hash_dict(d3) == hash_before
 
 
-class StructedDictTest(object):
+class TestStructedDict(object):
     def setUp(self):
         class UserDict(StructuredDict):
             struct = Struct({

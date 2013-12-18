@@ -28,7 +28,7 @@ TYPE_DEFAULT_VALUE = {
     bool: bool,
     list: list,
     dict: dict,
-    ObjectId: _None,
+    ObjectId: ObjectId,
     datetime.datetime: lambda: datetime.datetime.now()
 }
 
@@ -193,7 +193,7 @@ def validate_dict(doc, struct, allow_None_types=[], brother_types=[]):
     logger.debug('------validation all passed !')
 
 
-def build_dict(struct, **default):
+def build_dict(struct, *args):
     """
     DICT !!
     WILL NEVER HANDLE ANY THING IN LIST !!
@@ -206,11 +206,11 @@ def build_dict(struct, **default):
      * KeyError will be raised if not all dot_keys in default are properly set
     """
     assert isinstance(struct, dict), 'struct must be dict'
-    # to prevent changes on default
-    if default:
-        _default = copy.deepcopy(default)
+
+    if args:
+        defaults = dict(args)
     else:
-        _default = {}
+        defaults = {}
 
     def recurse_struct(st, pk):
         cd = {}
@@ -224,8 +224,8 @@ def build_dict(struct, **default):
             # if dot_key is found in default, stop recurse and set value immediatelly
             # this may make the dict structure broken (not valid with struct),
             # so a validate() will do at following
-            if ck in _default:
-                kv = _default.pop(ck)
+            if ck in defaults:
+                kv = defaults.pop(ck)
             else:
                 if isinstance(v, dict):
                     kv = recurse_struct(v, ck)
@@ -234,7 +234,9 @@ def build_dict(struct, **default):
                         v = list
                     assert isinstance(v, type), '%s %s must be <type type>' % (ck, v)
 
-                    kv = TYPE_DEFAULT_VALUE.get(v, lambda: None)()
+                    # The default value is None if not specified in `defaults`
+                    # kv = TYPE_DEFAULT_VALUE.get(v, lambda: None)()
+                    kv = None
 
             cd[k] = kv
             logger.debug('build: $.%s -> %s' % (ck, kv))
@@ -243,9 +245,9 @@ def build_dict(struct, **default):
 
     built = recurse_struct(struct, None)
 
-    #if len(_default.keys()) > 0:
-        #raise KeyError('Assignment of default value `%s` failed' % _default)
-    built.update(_default)
+    #if len(defaults.keys()) > 0:
+        #raise KeyError('Assignment of default value `%s` failed' % defaults)
+    built.update(defaults)
 
     return built
 
@@ -344,11 +346,11 @@ class Gen(object):
         keys = self.__dot_key.split('.')
         return recurse_struct(self.__struct_class.struct, keys)
 
-    def __call__(self, *args, **kwgs):
+    def __call__(self, *args):
         struct = self.__get_struct()
         #logging.debug('%s index struct: %s' % (self.__dot_key, struct))
         if isinstance(struct, dict):
-            return build_dict(struct, *args, **kwgs)
+            return build_dict(struct, *args)
         else:
             return TYPE_DEFAULT_VALUE.get(struct, lambda: None)()
 
@@ -358,6 +360,9 @@ class Gen(object):
         else:
             self.__dot_key += '.' + key
         return self
+
+    def __str__(self):
+        return '<Gen struct:%s>' % self.__get_struct()
 
 
 class Struct(object):
@@ -376,16 +381,16 @@ class Struct(object):
             6. dict
             7. ObjectId
     """
-    ALLOW_TYPES = (
-        #type(None),  # ? will it be used ?
-        bool,
-        int, float,
-        str, unicode,
-        list,
-        dict,
-        ObjectId,
-        datetime.datetime,
-    )
+    # ALLOW_TYPES = (
+    #     #type(None),  # ? will it be used ?
+    #     bool,
+    #     int, float,
+    #     str, unicode,
+    #     list,
+    #     dict,
+    #     ObjectId,
+    #     datetime.datetime,
+    # )
 
     def __init__(self, struct):
         assert isinstance(struct, dict), 'struct must be dict type'
@@ -395,6 +400,13 @@ class Struct(object):
 
     def __get__(self, ins, owner):
         return self._struct
+
+
+class StructuredDictMetaclass(type):
+    def __new__(cls, name, bases, attrs):
+        if 'struct' in attrs:
+            check_struct(attrs['struct'])
+        return type.__new__(cls, name, bases, attrs)
 
 
 class StructuredDict(dict):
@@ -452,6 +464,8 @@ class StructuredDict(dict):
 
         then you can do some thing with it
     """
+    __metaclass__ = StructuredDictMetaclass
+
     gen = GenCaller()
 
     allow_None_types = [str, unicode, ]

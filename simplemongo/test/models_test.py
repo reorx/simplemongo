@@ -2,14 +2,14 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-from nose.tools import *
+from nose.tools import assert_raises
 from pymongo import Connection
 from simplemongo.models import Document, Struct, ObjectId, StructDefineError
 from simplemongo.errors import ObjectNotFound, MultipleObjectsReturned
 
 
 _FAKE_DATA = {
-    'another_id': ObjectId(),
+    'id': ObjectId(),
     'name': 'reorx',
     'age': 20,
     'is_choosen': True,
@@ -36,7 +36,7 @@ class ModelTest(unittest.TestCase):
         class User(Document):
             col = db['user']
             struct = Struct({
-                'another_id': ObjectId,
+                'id': ObjectId,
                 'name': str,
                 'age': int,
                 'is_choosen': bool,
@@ -52,22 +52,32 @@ class ModelTest(unittest.TestCase):
                 }
             })
 
-        self.Model = User
+            defaults = {
+                'name': 'hello',
+                'magic.spell': 10.1,
+            }
+
+            required_fields = ['name', 'age', 'magic.camp']
+
+            strict_fields = ['id', 'age', 'magic.spell']
+
+        self.User = User
         self.db = db
 
     def tearDown(self):
-        self.db.drop_collection(self.Model.col)
+        self.db.drop_collection(self.User.col)
+        self.User = None
 
     def get_fake(self):
         d = fake_data()
-        self.Model(d).validate()
+        self.User(d).validate()
         return d
 
     def test_define_error(self):
-        with self.assertRaises(StructDefineError):
+        with assert_raises(StructDefineError):
             class User(Document):
                 struct = Struct({
-                    'another_id': ObjectId,
+                    'id': ObjectId,
                     'name': str,
                     'age': int,
                     'is_choosen': bool,
@@ -84,23 +94,23 @@ class ModelTest(unittest.TestCase):
                 })
 
     def test_new_and_gen(self):
-        with self.assertRaises(TypeError):
-            self.Model.new(magic=self.Model.gen.magic(camp=1))
+        with assert_raises(TypeError):
+            self.User.new(magic=self.User.gen.magic(camp=1))
 
-        u = self.Model.new(
+        u = self.User.new(
             name='reorx',
             age=20,
             is_choosen=True,
             skills=[
-                self.Model.gen.skills(name='Kill')
+                self.User.gen.skills(name='Kill')
             ],
-            magic=self.Model.gen.magic(camp='Chaos'),
+            magic=self.User.gen.magic(camp='Chaos'),
             # an extra key
             extra=None
         )
 
-        print set(u.keys()), set(self.Model.struct.keys())
-        assert (set(u.keys()) ^ set(self.Model.struct.keys())) == set(['extra', '_id'])
+        print set(u.keys()), set(self.User.struct.keys())
+        assert (set(u.keys()) ^ set(self.User.struct.keys())) == set(['extra', '_id'])
 
         assert u['name'] == 'reorx'
         assert u['age'] == 20
@@ -109,14 +119,14 @@ class ModelTest(unittest.TestCase):
         assert u['magic']['camp'] == 'Chaos'
 
     def test_save(self):
-        u = self.Model.new(
+        u = self.User.new(
             name='reorx',
             age=20,
             is_choosen=True,
             skills=[
-                self.Model.gen.skills(name='Kill')
+                self.User.gen.skills(name='Kill')
             ],
-            magic=self.Model.gen.magic(camp='Chaos')
+            magic=self.User.gen.magic(camp='Chaos')
         )
 
         rv = u.save()
@@ -128,8 +138,8 @@ class ModelTest(unittest.TestCase):
     def test_find(self):
         d = self.get_fake()
 
-        self.Model.col.insert(d)
-        cur = self.Model.find({'name': 'reorx'})
+        self.User.col.insert(d)
+        cur = self.User.find({'name': 'reorx'})
         assert cur.count() == 1
 
         u = cur.next()
@@ -143,8 +153,8 @@ class ModelTest(unittest.TestCase):
             d['name'] = name
             d['age'] = 14
             print d
-            self.Model.col.insert(d)
-        cur = self.Model.find({'age': 14})
+            self.User.col.insert(d)
+        cur = self.User.find({'age': 14})
         print [i for i in cur]
         assert cur.count() == 3
         for u in cur:
@@ -154,49 +164,49 @@ class ModelTest(unittest.TestCase):
     def test_exist(self):
         d = self.get_fake()
 
-        self.Model.col.insert(d)
+        self.User.col.insert(d)
 
-        assert self.Model.exist({'name': 'reorx'})
+        assert self.User.exist({'name': 'reorx'})
 
-        assert not self.Model.exist({'name': 'zorro'})
+        assert not self.User.exist({'name': 'zorro'})
 
     def test_one(self):
         d = self.get_fake()
 
-        self.Model.col.insert(d)
+        self.User.col.insert(d)
         query = {'name': 'reorx'}
-        self.Model.one(query)
+        self.User.one(query)
 
-        self.Model.col.insert(self.get_fake())
-        with self.assertRaises(MultipleObjectsReturned):
-            self.Model.one(query)
+        self.User.col.insert(self.get_fake())
+        with assert_raises(MultipleObjectsReturned):
+            self.User.one(query)
 
-        with self.assertRaises(ObjectNotFound):
-            self.Model.one({'age': 1})
+        with assert_raises(ObjectNotFound):
+            self.User.one({'age': 1})
 
     def test_by__id(self):
         d = self.get_fake()
 
-        _id = self.Model.col.insert(d)
-        u = self.Model.by__id(_id)
+        _id = self.User.col.insert(d)
+        u = self.User.by__id(_id)
         assert u['_id'] == _id
 
     def test_by__id_str(self):
         d = self.get_fake()
 
-        _id = self.Model.col.insert(d)
-        u = self.Model.by__id_str(str(_id))
+        _id = self.User.col.insert(d)
+        u = self.User.by__id_str(str(_id))
         assert u['_id'] == _id
 
     def test_identifier(self):
-        u = self.Model.new()
+        u = self.User.new()
         assert u.identifier == {'_id': u['_id']}
 
     def test_deepcopy(self):
         d = self.get_fake()
 
-        _id_str = self.Model.col.insert(d)
-        u = self.Model.one({'_id': ObjectId(_id_str)})
+        _id_str = self.User.col.insert(d)
+        u = self.User.one({'_id': ObjectId(_id_str)})
 
         d = u.deepcopy()
         d['magic']['camp'] = 'Order'
