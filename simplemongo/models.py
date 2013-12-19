@@ -8,7 +8,7 @@ import logging
 from bson.objectid import ObjectId
 from pymongo.collection import Collection
 from . import errors
-from .dstruct import StructuredDict, check_struct
+from .dstruct import StructuredDict, StructuredDictMetaclass, check_struct
 from .cursor import SimplemongoCursor, Cursor
 
 
@@ -26,7 +26,7 @@ def oid(id):
         raise ValueError('get type %s, should str\unicode or ObjectId' % type(id))
 
 
-class DocumentMetaclass(type):
+class DocumentMetaclass(StructuredDictMetaclass):
     """
     use for judging if Document's subclasses have assign attribute 'col' properly
     """

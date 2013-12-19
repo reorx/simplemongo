@@ -9,8 +9,8 @@ from bson.objectid import ObjectId
 from .errors import StructError
 
 
-logger = logging.getLogger('torext.mongodb')
-logger.setLevel(logging.INFO)
+logger = logging.getLogger('simplemongo')
+logger.setLevel(logging.DEBUG)
 
 
 # TODO change dict building mechanism:
@@ -31,6 +31,17 @@ TYPE_DEFAULT_VALUE = {
     ObjectId: ObjectId,
     datetime.datetime: lambda: datetime.datetime.now()
 }
+
+
+ALLOW_TYPES = [
+    bool,
+    int, float,
+    str, unicode,
+    list,
+    dict,
+    ObjectId,
+    datetime.datetime,
+]
 
 
 def check_struct(struct):
@@ -54,18 +65,26 @@ def check_struct(struct):
                 if isinstance(v_item, dict):
                     check_struct(v_item)
                 else:
-                    if not v_item in Struct.ALLOW_TYPES:
+                    if not v_item in ALLOW_TYPES:
                         raise StructError('value "%s" in list '
-                                                'is neither one of Struct.ALLOW_TYPES '
+                                                'is neither one of ALLOW_TYPES '
                                                 'nor instance of dict' % v_item)
 
         # check value to be type in `ALLOW_TYPES` if not instance of dict or list
         else:
-            if not v in Struct.ALLOW_TYPES:
-                raise StructError('value "%s" is not one of Struct.ALLOW_TYPES' % v)
+            if not v in ALLOW_TYPES:
+                raise StructError('value "%s" is not one of ALLOW_TYPES' % v)
 
 
-def validate_dict(doc, struct, allow_None_types=[], brother_types=[]):
+def _remove_list_mark(key):
+    if '[' in key:
+        index = key.find('[')
+        key = key[0:index - 1] + key[index + 3:]
+        return _remove_list_mark(key)
+    return key
+
+
+def validate_dict(doc, struct, required_fields=None, strict_fields=None):
     """
     Validate a dict from the defined structure.
 
@@ -129,56 +148,115 @@ def validate_dict(doc, struct, allow_None_types=[], brother_types=[]):
     """
     logger.debug('------call validate_dict()')
 
-    assert isinstance(doc, dict), 'doc must be dict'
+    # assert isinstance(doc, dict), 'doc must be dict'
     assert isinstance(struct, dict), 'struct must be dict'
     check_struct(struct)
 
-    def recurse_check(st, o, ck):
+    # required_parents_set = set()
+    # for i in required_fields:
+    #     if '.' in i:
+    #         required_parents_set |= set(i.split('.')[1:])
+    # print 'parents set', required_parents_set
+    if required_fields is None:
+        required_fields = []
+    if strict_fields is None:
+        strict_fields = []
+
+    # required_sets = set(required_fields)
+
+    logger.debug('required_fields: %s', required_fields)
+    logger.debug('strict_fields: %s', strict_fields)
+
+    def parent_of(k):
+        for i in required_fields:
+            kdot = k + '.'
+            if i.startswith(kdot):
+                return i
+        return False
+
+    def is_strict(k):
+        if _remove_list_mark(k) in strict_fields:
+            return True
+        return False
+
+    def recurse_check(st, o, ck, local_required=None):
         # `st` means struct, it could be a type
+        # `nst` means next loop struct
         # `o`  means object to be validate
         # `ck` means current key
         # `nk` means next key
         # `bv` means bottom value
 
-        if st in Struct.ALLOW_TYPES:
+        if local_required is None:
+            local_required = []
+        local_required_current = []
+        # local_required_next = []
+        for i in local_required:
+            sp = i.split('.')
+            local_required_current.append(sp[0])
+            # if len(sp) > 1:
+            #     local_required_next.append('.'.join(sp[1:]))
+
+        def get_next_required(k):
+            nr = []
+            for i in local_required:
+                if i.startswith(k + '.'):
+                    nr.append(i[len(k) + 1:])
+            return nr
+
+        if st in ALLOW_TYPES:
             typ = st
         else:
             # list or dict
             typ = type(st)
-        logger.debug('@ %s\ndefine: %s\nobj   : %s %s' % (ck, typ, type(o), o))
+        logger.debug(
+            '@ %s\ndefined: %s\nobj   : %s %s\nrequired: %s',
+            ck, typ, type(o), o, local_required_current)
 
-        if not isinstance(o, typ):
-            _pass = False
-            if o is None:
-                # if typ in allow_None_types:
-                #     logger.debug('allowing condition: %s can be None' % ck)
-                #     _pass = True
-
-                # Now we allow all fields to be None
-                _pass = True
-            else:
-                for bro in brother_types:
-                    if typ in bro and isinstance(o, bro):
-                        logger.debug('allowing condition: (%s, %s) in brother_types' % (type(o), typ))
-                        _pass = True
-                        break
-
-            if not _pass:
+        if o is None:
+            if local_required_current and typ is dict:
+            # field = parent_of(ck)
+            # if field:
+            #     logger.debug('parent of %s' % field)
                 raise TypeError(
-                    'Position(%s): type "%s" should be "%s", value: "%s"' % (ck, type(o), typ, o))
+                    "On key '%s' None, should not be None since %s are required in it" %
+                    (ck, local_required_current))
+
+            if is_strict(ck):
+                raise TypeError("On key '%s' %s, %s, should be type %s" % (ck, o, type(o), typ))
+
+            return
+
+        elif not isinstance(o, typ):
+            # TODO support multi-type validation (use tuple to define)
+            raise TypeError("On key '%s' %s, %s, should be type %s" % (ck, o, type(o), typ))
 
         logger.debug('---')
 
         # recurse down step
         if isinstance(st, dict):
             for k, nst in st.iteritems():
-                if not k in o:
-                    raise TypeError('Position(%s): key "%s" not in "%s"' % ((ck is None) or '*TOP*', k, o))
-                if ck is None:
-                    nk = k
-                else:
-                    nk = ck + '.' + k
-                recurse_check(nst, o[k], nk)
+                if k in local_required_current and not k in o:
+                    raise KeyError("Under key '%s', subkey '%s', value %s, not exist" % (ck or '$', k, o))
+
+                # local_required_next = get_next_required(k)
+                # if local_required_next:
+                #     if not k in o:
+                #         raise TypeError(
+                #             "On key '%s' None, should not be None since %s is required in it" %
+                #             (ck, local_required_next))
+
+                if k in o:
+                    if ck is None:
+                        nk = k
+                    else:
+                        nk = ck + '.' + k
+
+                    # if nk in required_sets:
+                    #     required_sets.remove(nk)
+
+
+                    recurse_check(nst, o[k], nk, get_next_required(k))
 
         elif isinstance(st, list) and len(st) == 1:
             # NOTE currently, redundancy validations, which may occured on list,
@@ -187,14 +265,20 @@ def validate_dict(doc, struct, allow_None_types=[], brother_types=[]):
             nst = st[0]
             for loop, i in enumerate(o):
                 nk = '%s.[%s]' % (ck, loop)
-                recurse_check(nst, i, nk)
+                recurse_check(nst, i, nk, local_required)
 
-    recurse_check(struct, doc, None)
+    recurse_check(struct, doc, None, required_fields)
+
+    # if required_sets:
+    #     raise KeyError('required fields: %s not exist', required_sets)
     logger.debug('------validation all passed !')
 
 
-def build_dict(struct, *args):
+def build_dict(struct, *args, **kwargs):
     """
+    args: (key, value)
+    kwargs: key=value
+
     DICT !!
     WILL NEVER HANDLE ANY THING IN LIST !!
 
@@ -207,10 +291,9 @@ def build_dict(struct, *args):
     """
     assert isinstance(struct, dict), 'struct must be dict'
 
+    defaults = kwargs
     if args:
-        defaults = dict(args)
-    else:
-        defaults = {}
+        defaults.update(dict(args))
 
     def recurse_struct(st, pk):
         cd = {}
@@ -346,11 +429,11 @@ class Gen(object):
         keys = self.__dot_key.split('.')
         return recurse_struct(self.__struct_class.struct, keys)
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
         struct = self.__get_struct()
         #logging.debug('%s index struct: %s' % (self.__dot_key, struct))
         if isinstance(struct, dict):
-            return build_dict(struct, *args)
+            return build_dict(struct, *args, **kwargs)
         else:
             return TYPE_DEFAULT_VALUE.get(struct, lambda: None)()
 
@@ -381,16 +464,7 @@ class Struct(object):
             6. dict
             7. ObjectId
     """
-    # ALLOW_TYPES = (
-    #     #type(None),  # ? will it be used ?
-    #     bool,
-    #     int, float,
-    #     str, unicode,
-    #     list,
-    #     dict,
-    #     ObjectId,
-    #     datetime.datetime,
-    # )
+
 
     def __init__(self, struct):
         assert isinstance(struct, dict), 'struct must be dict type'
@@ -433,8 +507,10 @@ class StructuredDict(dict):
         >>> class SomeStruct(StructuredDict):
         ...     struct = {
         ...         'id': ObjectId,
-        ...         'name': str,
-        ...         'description': unicode,
+        ...         'name': {
+        ...             'first': str,
+        ...             'last': str
+        ...         },
         ...         'contributers': [
         ...             {
         ...                 'name': str,
@@ -442,16 +518,17 @@ class StructuredDict(dict):
         ...                 'hangon': bool,
         ..              }
         ...         ],
-        ...         'flag': list,
+        ...         'flag': str,
         ...     }
         ...
-        ...     default_values = {
-        ...         'flag': 'fuck-you',
-        ...     }
-        ...
-        ...     allow_None_types = [
-        ...         str,
+        ...     defaults = [
+        ...         ('name.last', 'Clanned')
+        ...         ('flag', 'A')
         ...     ]
+        ...
+        ...     required_fields = ['id', 'contributers']
+        ...
+        ...     strict_fields = ['id', 'name']
         ...
 
         # build a pure instance:
@@ -468,12 +545,9 @@ class StructuredDict(dict):
 
     gen = GenCaller()
 
-    allow_None_types = [str, unicode, ]
+    required_fields = None
 
-    brother_types = [
-        (str, unicode),
-        (int, long),
-    ]
+    strict_fields = None
 
     @classmethod
     def build_instance(cls, *args, **kwgs):
@@ -490,8 +564,8 @@ class StructuredDict(dict):
         cls = self.__class__
         assert hasattr(cls, 'struct'), '`validate` method requires definition of `struct`'
         validate_dict(self, cls.struct,
-                      allow_None_types=cls.allow_None_types,
-                      brother_types=cls.brother_types)
+                      required_fields=cls.required_fields,
+                      strict_fields=cls.strict_fields)
 
     def retrieval_get(self, dot_key):
         """

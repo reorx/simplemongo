@@ -7,15 +7,9 @@ import datetime
 import copy
 
 from simplemongo.dstruct import (
-    check_struct,
-    build_dict,
-    retrieve_dict,
-    map_dict,
-    hash_dict,
-    StructuredDict,
-    Struct,
-    ObjectId,
-    validate_dict,
+    check_struct, build_dict, validate_dict,
+    retrieve_dict, map_dict, hash_dict,
+    StructuredDict, ObjectId,
 )
 from simplemongo.errors import StructError
 
@@ -104,63 +98,102 @@ class TestFunctions(object):
             check_struct(d)
 
     def test_validate_dict(self):
+        # 0. original
         d = self.d()
+        validate_dict(d, self.s())
+        d['name'] = 123
+        with assert_raises(TypeError):
+            validate_dict(d, self.s())
 
-        # no more, no less
+    def test_validate_dict_nr_ns(self):
+        # 1 not required and not strict
+        #   - not exist
+        #   - exist and value is instance of type
+        #   - exist and value is None
+
+        d = self.d(disks=None)
+        del d['name']
         validate_dict(d, self.s())
 
-        # wrong type
-        d = self.d(id=1)
-        with assert_raises(TypeError):
-            validate_dict(d, self.s())
+    def test_validate_dict_r_ns(self):
+        # 2 required and not strict
+        #   - exist and value is instance of type
+        #   - exist and value is None
 
-        # None
+        d = self.d()
+        del d['name']
+        with assert_raises(KeyError):
+            validate_dict(d, self.s(), required_fields=['name'])
+
+        d = self.d(nature=None)
+        validate_dict(d, self.s(), required_fields=['nature'])
+        with assert_raises(TypeError):
+            validate_dict(d, self.s(), required_fields=['nature.luck'])
+        d['nature'] = {}
+        with assert_raises(KeyError):
+            validate_dict(d, self.s(), required_fields=['nature.luck'])
+
+    def test_validate_dict_nr_s(self):
+        # 3. not required and strict
+        #    - not exist
+        #    - exist and value is instance of type
+        d = self.d()
+        del d['name']
+        validate_dict(d, self.s(), strict_fields=['name'])
+
         d = self.d(name=None)
         with assert_raises(TypeError):
-            validate_dict(d, self.s())
+            validate_dict(d, self.s(), strict_fields=['name'])
 
-    def test_validate_dict_more_less(self):
+    def test_validate_dict_r_s(self):
+        # 4. required and strict
+        #    - exist and value is instance of type
         d = self.d()
+        del d['name']
+        with assert_raises(KeyError):
+            validate_dict(d, self.s(), required_fields=['name'], strict_fields=['name'])
 
-        # more
-        extra_value = 'are you?'
-        d['_d'] = extra_value
-        d['nature']['_nature'] = extra_value
-        d['disks'][0]['_disks'] = extra_value
-        d['disks'][0]['volums'][0]['_volums'] = extra_value
+        d = self.d()
+        validate_dict(d, self.s(), required_fields=['nature.luck'], strict_fields=['nature.luck'])
+
+        d['nature']['luck'] = None
+        with assert_raises(TypeError):
+            validate_dict(d, self.s(), required_fields=['nature.luck'], strict_fields=['nature.luck'])
+
+        del d['nature']['luck']
+        with assert_raises(KeyError):
+            validate_dict(d, self.s(), required_fields=['nature.luck'], strict_fields=['nature.luck'])
+
+
+    def test_validate_dict_nis(self):
+        # 5. not in struct
+        d = self.d(foo='bar')
         validate_dict(d, self.s())
 
-        # less
-        del d['disks'][0]['volums'][0]['size']
-        with assert_raises(TypeError):
-            validate_dict(d, self.s())
+    # def test_validate_dict_more_less(self):
+    #     d = self.d()
 
-    def test_validate_dict_allow_None_types(self):
-        d = self.d(name=None)
-        with assert_raises(TypeError):
-            validate_dict(d, self.s())
+    #     # more
+    #     extra_value = 'are you?'
+    #     d['_d'] = extra_value
+    #     d['nature']['_nature'] = extra_value
+    #     d['disks'][0]['_disks'] = extra_value
+    #     d['disks'][0]['volums'][0]['_volums'] = extra_value
+    #     validate_dict(d, self.s())
 
-        validate_dict(d, self.s(), allow_None_types=[str])
+    #     # less
+    #     del d['disks'][0]['volums'][0]['size']
+    #     with assert_raises(TypeError):
+    #         validate_dict(d, self.s())
 
-    def test_validate_dict_brother_types(self):
-        d = self.d()
-        d['nature']['luck'] = float(3.14159)
-        with assert_raises(TypeError):
-            validate_dict(d, self.s(), allow_None_types=[str])
-
-        validate_dict(d, self.s(), allow_None_types=[str], brother_types=[(int, float)])
 
     # require validate_dict
     def test_build_dict(self):
-        d1 = build_dict(self.s(), {
-            'nature.luck': 1
-        })
+        d1 = build_dict(self.s(), ('nature.luck', 1))
         print d1
         validate_dict(d1, self.s())
 
-        d2 = build_dict(self.s(), {
-            'nature.luck': 2
-        })
+        d2 = build_dict(self.s(), ('nature.luck', 2))
         print d2
         assert d1['nature']['luck'] != d2['nature']['luck']
 
@@ -199,88 +232,216 @@ class TestFunctions(object):
 class TestStructedDict(object):
     def setUp(self):
         class UserDict(StructuredDict):
-            struct = Struct({
+            struct = {
                 'id': ObjectId,
                 'name': str,
-                'nature': {
-                    'luck': int,
+                'bio': str,
+                'attributes': {
+                    'strength': int,
+                    'armor': int,
+                    'fortune': int,
                 },
-                'people': [str],
-                'disks': [
+                'slots': [str],
+                'skills': [
                     {
+                        'name': str,
+                        'level': int,
+                        'damage': float,
                         'is_primary': bool,
-                        'last_modified': datetime.datetime,
-                        'volums': [
+                        'parents': [
                             {
                                 'name': str,
-                                'size': int,
-                                'block': [int]
+                                'distance': int,
                             }
                         ]
                     }
                 ],
-                'extra': float
-            })
+            }
 
-        self.S = UserDict
+            required_fields = [
+                'id', 'name',
+                'attributes.strength', 'attributes.armor',
+                'skills', 'skills.name', 'skills.damage'
+            ]
 
-    # requires UtilitiesTest.test_validate_dict
+            strict_fields = ['id', 'slots', 'skills.damage', 'skills.level']
+
+        self.UserDict = UserDict
+
+    def sample(self, **kwargs):
+        d = self.UserDict({
+            'id': ObjectId(),
+            'name': 'reorx',
+            'bio': 'blade of chaos',
+            'attributes': {
+                'strength': 10,
+                'armor': 20,
+                'fortune': 8,
+            },
+            'slots': ['red_potion', 'red_potion', 'blue_potion'],
+            'skills': [
+                {
+                    'name': 'heavy punch',
+                    'level': 5,
+                    'damage': 90.0,
+                    'is_primary': False,
+                },
+                {
+                    'name': 'upper cut',
+                    'level': 3,
+                    'damage': 180.0,
+                    'is_primary': True,
+                    'parents': [
+                        {
+                            'name': 'heavy punch',
+                            'distance': 1,
+                        }
+                    ]
+                }
+            ],
+        })
+
+        d.update(kwargs)
+        return d
+
     def test_validate(self):
-        d = copy.deepcopy(DICT_SAMPLE)
-        validate_dict(d, self.S.struct,
-                      allow_None_types=self.S.allow_None_types,
-                      brother_types=self.S.brother_types)
+        ud = self.sample()
+        ud.validate()
 
-        sd = self.S(d)
-        sd.validate()
+        ud['skills'][1]['parents'][0]['distance'] = 'wtf'
+        with assert_raises(TypeError):
+            ud.validate()
+        ud['skills'][1]['parents'][0]['distance'] = 1
+
+    def test_validate_nr_ns(self):
+        ud = self.sample()
+
+        # 1. nr ns
+        print '# 1. nr ns'
+        del ud['bio']
+        del ud['slots']
+        ud.validate()
+
+    def test_validate_r_ns(self):
+        ud = self.sample()
+
+        # 2. r ns
+        print '# 2. r ns'
+        del ud['attributes']['strength']
+        with assert_raises(KeyError):
+            ud.validate()
+        ud['attributes']['strength'] = 11
+
+        ud['skills'][0]['name'] = None
+        ud.validate()
+        del ud['skills'][0]['name']
+        with assert_raises(KeyError):
+            ud.validate()
+        ud['skills'][0]['name'] = 'punch'
+
+        ud['skills'] = None
+        ud.validate()
+
+    def test_validate_nr_s(self):
+        ud = self.sample()
+
+        # 3. nr s
+        print '# 3. nr s'
+        ud['slots'] = None
+        with assert_raises(TypeError):
+            ud.validate()
+        del ud['slots']
+        ud.validate()
+        ud['slots'] = []
+
+        ud['skills'][0]['level'] = None
+        with assert_raises(TypeError):
+            ud.validate()
+        del ud['skills'][0]['level']
+        ud.validate()
+        ud['skills'][0]['level'] = 5
+
+
+    def test_validate_r_s(self):
+        ud = self.sample()
+
+        # 4. r s
+        print '# 4. r s'
+        ud['id'] = None
+        with assert_raises(TypeError):
+            ud.validate()
+        del ud['id']
+        with assert_raises(KeyError):
+            ud.validate()
+        ud['id'] = ObjectId()
+
+        ud['skills'][0]['damage'] = None
+        with assert_raises(TypeError):
+            ud.validate()
+        del ud['skills'][0]['damage']
+        with assert_raises(KeyError):
+            ud.validate()
+        ud['skills'][0]['damage'] = 90.0
 
     # internally requires test_validate
     def test_build_instance(self):
-        ins = self.S.build_instance()
-        d = build_dict(self.S.struct)
+        # meet required_fields and strict_fields
+        # required_fields = [
+        #     'id', 'name',
+        #     'attributes.strength', 'attributes.armor',
+        #     'skills', 'skills.name', 'skills.damage'
+        # ]
+        # strict_fields = ['id', 'slots', 'skills.damage', 'skills.level']
+
+        kwargs = dict(
+            id=ObjectId(),
+            name='reorx',
+            attributes={
+                'strength': 10,
+                'armor': 10
+            },
+            skills=[{'name': 'test', 'damage': 1.1}],
+            slots=[]
+        )
+
+        ins = self.UserDict.build_instance(**kwargs)
+        d = build_dict(self.UserDict.struct, **kwargs)
+
+        assert d['name'] == 'reorx'
+        assert d['skills'][0]['name'] == 'test'
+
         del ins['id']
         del d['id']
         assert hash_dict(ins) == hash_dict(d)
 
         with assert_raises(TypeError):
-            ins = self.S.build_instance(name=1)
-
-        ins = self.S.build_instance(
-            name='reorx',
-            nature={
-                'luck': 10
-            }
-        )
-        assert ins['name'] == 'reorx'
-        assert ins['nature']['luck'] == 10
+            ins = self.UserDict.build_instance(name=1)
 
     # requires test_build_instance
     def test_retrieval_operations(self):
-        ins = self.S.build_instance(
+        ins = self.UserDict.build_instance(
+            id=ObjectId(),
             name='reorx',
-            nature={
-                'luck': 10
+            attributes={
+                'strength': 10,
+                'armor': 10
             },
-            disks=[
-                {
-                    'is_primary': True,
-                    'last_modified': datetime.datetime.now(),
-                    'volums': []
-                }
-            ]
+            skills=[{'name': 'test', 'damage': 1.1}],
+            slots=[]
         )
 
         assert ins['name'] == ins.retrieval_get('name')
-        assert ins['nature']['luck'] == ins.retrieval_get('nature.luck')
-        assert ins['disks'][0]['is_primary'] == ins.retrieval_get('disks.[0].is_primary')
+        assert ins['attributes']['strength'] == ins.retrieval_get('attributes.strength')
+        assert ins['skills'][0]['damage'] == ins.retrieval_get('skills.[0].damage')
 
-    # requires UtilitiesTest.test_build_dict
+    # # requires UtilitiesTest.test_build_dict
     def test_gen(self):
-        assert isinstance(self.S.gen.id(), ObjectId)
+        assert isinstance(self.UserDict.gen.id(), ObjectId)
 
-        d = self.S.gen.nature()
-        assert len(d.keys()) == 1 and d['luck'] == 0
+        d = self.UserDict.gen.attributes()
+        print d
+        assert len(d.keys()) == 3 and 'strength' in d
 
-        d = self.S.gen.disks.volums(name='EVA-01')
+        d = self.UserDict.gen.skills.parents(name='foo')
         assert hash_dict(d) == hash_dict(
-            build_dict(self.S.struct['disks'][0]['volums'][0], name='EVA-01'))
+            build_dict(self.UserDict.struct['skills'][0]['parents'][0], name='foo'))
