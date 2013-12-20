@@ -21,5 +21,6 @@ setup(
         'Programming Language :: Python :: 2.7',
         'Development Status :: 2 - Pre-Alpha'
     ],
-    install_requires=['pymongo']
+    install_requires=['pymongo'],
+    test_suite='nose.collector'
 )
