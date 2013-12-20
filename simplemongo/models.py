@@ -8,7 +8,7 @@ import logging
 from bson.objectid import ObjectId
 from pymongo.collection import Collection
 from . import errors
-from .dstruct import StructuredDict, StructuredDictMetaclass
+from .dstruct import StructuredDict, StructuredDictMetaclass, diff_dicts
 from .cursor import SimplemongoCursor, Cursor
 
 
@@ -114,7 +114,9 @@ class Document(StructuredDict):
         if raw is None:
             super(Document, self).__init__()
         else:
-            super(Document, self).__init__(raw)
+            # Use deepcopy to isolate raw and Document itself
+            super(Document, self).__init__(copy.deepcopy(raw))
+        self._raw = raw
 
         self._in_db = from_db
 
@@ -156,6 +158,33 @@ class Document(StructuredDict):
             self.identifier, spec, **self._get_write_options(**kwargs))
         return rv
 
+    @property
+    def changes(self):
+        if not self._raw:
+            return None
+        c = {}
+
+        diff = diff_dicts(self, self._raw)
+
+        # $set & $inc
+        if diff['+']:
+            c['$set'] = diff['+']
+
+        # $inc
+        for i in diff['~']:
+            if isinstance(self[i], int) and isinstance(self._raw[i], int):
+                inc = c.setdefault('$inc', {})
+                inc[i] = self[i] - self._raw[i]
+            else:
+                set_ = c.setdefault('$set', {})
+                set_[i] = self[i]
+
+        # $unset
+        if diff['-']:
+            c['$unset'] = diff['-']
+
+        return c
+
     def pull(self):
         """Update document from database
         """
@@ -172,9 +201,10 @@ class Document(StructuredDict):
         """
         initialize by structure of self.struct
         """
+        if not '_id' in kwargs:
+            kwargs['_id'] = ObjectId()
+            logging.debug('_id generated %s' % kwargs['_id'])
         instance = cls.build_instance(**kwargs)
-        instance['_id'] = ObjectId()
-        logging.debug('_id generated %s' % instance['_id'])
         return instance
 
     @classmethod

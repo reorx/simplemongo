@@ -397,6 +397,33 @@ def hash_dict(o):
     return md5(string).hexdigest()
 
 
+def diff_dicts(new, origin):
+    """Only compare the first layer, return a the dict that represent
+    add, remove, modify changes from new to origin
+
+    NOTE: If one of the two dicts comes from another, eg. from .copy(),
+    # make sure new and origin are totally different from each other,
+    that means, the result may not be as you think. So use deepcopy in case.
+    """
+    diff = {
+        '+': {},
+        '-': [],
+        '~': {}
+    }
+    for k, v in new.iteritems():
+        if not k in origin:
+            diff['+'][k] = v
+            continue
+        if v != origin[k]:
+            diff['~'][k] = v
+
+    for k in origin:
+        if not k in new:
+            diff['-'].append(k)
+
+    return diff
+
+
 class GenCaller(object):
     def __get__(self, ins, owner):
         return Gen(owner)

@@ -189,3 +189,32 @@ class ModelTest(unittest.TestCase):
 
         d['skills'].append(1)
         assert len(d['skills']) != len(u['skills'])
+
+    def test_changes(self):
+        u = self.get_new()
+        print u
+        u['name'] = 'reorx reborn'
+        u['age'] = 21
+        u['skills'].append(1)
+        u['magic']['spell'] = 111
+        del u['is_choosen']
+
+        c = {
+            '$set': {
+                'name': 'reorx reborn',
+                'skills': [{'name': 'Kill', 'power': None}, 1],
+                'magic': {
+                    'camp': 'Chaos',
+                    'spell': 111
+                }
+            },
+            '$inc': {
+                'age': 1
+            },
+            '$unset': ['is_choosen']
+        }
+        _c = u.changes
+        # print _c
+        for k in c:
+            print c[k], _c[k]
+            assert c[k] == _c[k]
