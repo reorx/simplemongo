@@ -104,6 +104,7 @@ class Document(StructuredDict):
         'j': False
     }
 
+    # validate only works on `save` method
     __validate__ = True
 
     def __init__(self, raw=None, from_db=False):
@@ -184,6 +185,11 @@ class Document(StructuredDict):
             c['$unset'] = diff['-']
 
         return c
+
+    def update_changes(self, **kwargs):
+        c = self.changes
+        logging.debug('update changes: %s', c)
+        self.update_doc(c, **kwargs)
 
     def pull(self):
         """Update document from database

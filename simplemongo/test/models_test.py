@@ -218,3 +218,19 @@ class ModelTest(unittest.TestCase):
         for k in c:
             print c[k], _c[k]
             assert c[k] == _c[k]
+
+    def test_update_changes(self):
+        u = self.get_new()
+        u.save()
+
+        u['name'] = 'reorx reborn'
+        u['age'] = 21
+        u['magic']['spell'] = 111.11
+
+        u.update_changes()
+
+        d = self.User.col.find_one(u.identifier)
+        print d
+        assert d['name'] == 'reorx reborn'
+        assert d['age'] == 21
+        assert d['magic']['spell'] == 111.11
