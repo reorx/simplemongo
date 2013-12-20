@@ -8,7 +8,7 @@ import logging
 from bson.objectid import ObjectId
 from pymongo.collection import Collection
 from . import errors
-from .dstruct import StructuredDict, StructuredDictMetaclass, check_struct
+from .dstruct import StructuredDict, StructuredDictMetaclass
 from .cursor import SimplemongoCursor, Cursor
 
 
@@ -32,22 +32,23 @@ class DocumentMetaclass(StructuredDictMetaclass):
     """
     def __new__(cls, name, bases, attrs):
 
-        # Repeat code in dstruct.StructuredDictMetaclass.__new__
-        if 'struct' in attrs:
-            check_struct(attrs['struct'])
+        # # Repeat code in dstruct.StructuredDictMetaclass.__new__
+        # if 'struct' in attrs:
+        #     check_struct(attrs['struct'])
 
-        # judge if the target class is Document
+        # test if the target class is Document
         if not (len(bases) == 1 and bases[0] is StructuredDict):
-            if not ('col' in attrs and isinstance(attrs['col'], Collection)):
+
+            # check collection
+            if not 'col' in attrs:
+                raise errors.StructError('`col` attribute should be assigned for Document subclass')
+            if not isinstance(attrs['col'], Collection):
                 raise errors.StructError(
-                    'col of a Document is not set properly, received: %s %s' %
+                    '`col` should be pymongo.Collection instance, received: %s %s' %
                     (attrs['col'], type(attrs['col'])))
 
-            struct = attrs.get('struct')
-            if struct:
-                check_struct(struct)
-
-        return type.__new__(cls, name, bases, attrs)
+        # return type.__new__(cls, name, bases, attrs)
+        return StructuredDictMetaclass.__new__(cls, name, bases, attrs)
 
 
 class Document(StructuredDict):
@@ -189,6 +190,7 @@ class Document(StructuredDict):
             kwargs['secondary_acceptable_latency_ms'] = (
                 cls.col.secondary_acceptable_latency_ms)
 
+        logging.debug('find: %s, %s', args, kwargs)
         kwargs['wrapper'] = cls
         cursor = SimplemongoCursor(cls.col, *args, **kwargs)
         return cursor
@@ -203,7 +205,14 @@ class Document(StructuredDict):
             count = cursor.count()
             if count > 1:
                 raise errors.MultipleObjectsReturned(
-                    'Got multiple(%s) results in query %s' % (count, spec_or_id))
+                    'explain: %s' % cursor.explain())
         for doc in cursor:
             return doc
         return None
+
+    @classmethod
+    def one_or_raise(cls, *args, **kwargs):
+        rv = cls.one(*args, **kwargs)
+        if rv is None:
+            raise errors.ObjectNotFound('Could not find: %s, %s' % (args, kwargs))
+        return rv

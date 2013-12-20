@@ -4,8 +4,8 @@
 import unittest
 from nose.tools import assert_raises
 from pymongo import Connection
-from simplemongo.models import Document, Struct, ObjectId, StructDefineError
-from simplemongo.errors import ObjectNotFound, MultipleObjectsReturned
+from simplemongo.models import Document, ObjectId
+from simplemongo.errors import ObjectNotFound, MultipleObjectsReturned, StructError
 
 
 _FAKE_DATA = {
@@ -35,7 +35,7 @@ class ModelTest(unittest.TestCase):
 
         class User(Document):
             col = db['user']
-            struct = Struct({
+            struct = {
                 'id': ObjectId,
                 'name': str,
                 'age': int,
@@ -50,7 +50,7 @@ class ModelTest(unittest.TestCase):
                     'spell': float,
                     'camp': str
                 }
-            })
+            }
 
             defaults = {
                 'name': 'hello',
@@ -74,9 +74,9 @@ class ModelTest(unittest.TestCase):
         return d
 
     def test_define_error(self):
-        with assert_raises(StructDefineError):
+        with assert_raises(StructError):
             class User(Document):
-                struct = Struct({
+                struct = {
                     'id': ObjectId,
                     'name': str,
                     'age': int,
@@ -91,23 +91,28 @@ class ModelTest(unittest.TestCase):
                         'spell': float,
                         'camp': str
                     }
-                })
+                }
 
-    def test_new_and_gen(self):
-        with assert_raises(TypeError):
-            self.User.new(magic=self.User.gen.magic(camp=1))
-
+    def get_new(self):
         u = self.User.new(
+            id=ObjectId(),
             name='reorx',
             age=20,
             is_choosen=True,
             skills=[
                 self.User.gen.skills(name='Kill')
             ],
-            magic=self.User.gen.magic(camp='Chaos'),
+            magic=self.User.gen.magic(camp='Chaos', spell=354.21),
             # an extra key
             extra=None
         )
+        return u
+
+    def test_new_and_gen(self):
+        with assert_raises(TypeError):
+            self.User.new(magic=self.User.gen.magic(camp=1))
+
+        u = self.get_new()
 
         print set(u.keys()), set(self.User.struct.keys())
         assert (set(u.keys()) ^ set(self.User.struct.keys())) == set(['extra', '_id'])
@@ -119,15 +124,7 @@ class ModelTest(unittest.TestCase):
         assert u['magic']['camp'] == 'Chaos'
 
     def test_save(self):
-        u = self.User.new(
-            name='reorx',
-            age=20,
-            is_choosen=True,
-            skills=[
-                self.User.gen.skills(name='Kill')
-            ],
-            magic=self.User.gen.magic(camp='Chaos')
-        )
+        u = self.get_new()
 
         rv = u.save()
         assert isinstance(rv, ObjectId) and rv == u['_id']
@@ -161,45 +158,23 @@ class ModelTest(unittest.TestCase):
             assert isinstance(u, Document)
             assert u['name'] in user_names
 
-    def test_exist(self):
-        d = self.get_fake()
-
-        self.User.col.insert(d)
-
-        assert self.User.exist({'name': 'reorx'})
-
-        assert not self.User.exist({'name': 'zorro'})
-
     def test_one(self):
         d = self.get_fake()
 
         self.User.col.insert(d)
         query = {'name': 'reorx'}
-        self.User.one(query)
+        assert self.User.one(query)
+        assert not self.User.one({'foo': 'bar'})
 
         self.User.col.insert(self.get_fake())
         with assert_raises(MultipleObjectsReturned):
             self.User.one(query)
 
         with assert_raises(ObjectNotFound):
-            self.User.one({'age': 1})
-
-    def test_by__id(self):
-        d = self.get_fake()
-
-        _id = self.User.col.insert(d)
-        u = self.User.by__id(_id)
-        assert u['_id'] == _id
-
-    def test_by__id_str(self):
-        d = self.get_fake()
-
-        _id = self.User.col.insert(d)
-        u = self.User.by__id_str(str(_id))
-        assert u['_id'] == _id
+            self.User.one_or_raise({'age': 1})
 
     def test_identifier(self):
-        u = self.User.new()
+        u = self.get_new()
         assert u.identifier == {'_id': u['_id']}
 
     def test_deepcopy(self):

@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import copy
 import logging
 import datetime
 from hashlib import md5
@@ -10,7 +9,7 @@ from .errors import StructError
 
 
 logger = logging.getLogger('simplemongo')
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
 # TODO change dict building mechanism:

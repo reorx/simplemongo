@@ -170,23 +170,6 @@ class TestFunctions(object):
         d = self.d(foo='bar')
         validate_dict(d, self.s())
 
-    # def test_validate_dict_more_less(self):
-    #     d = self.d()
-
-    #     # more
-    #     extra_value = 'are you?'
-    #     d['_d'] = extra_value
-    #     d['nature']['_nature'] = extra_value
-    #     d['disks'][0]['_disks'] = extra_value
-    #     d['disks'][0]['volums'][0]['_volums'] = extra_value
-    #     validate_dict(d, self.s())
-
-    #     # less
-    #     del d['disks'][0]['volums'][0]['size']
-    #     with assert_raises(TypeError):
-    #         validate_dict(d, self.s())
-
-
     # require validate_dict
     def test_build_dict(self):
         d1 = build_dict(self.s(), ('nature.luck', 1))
