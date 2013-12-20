@@ -28,10 +28,16 @@ _FAKE_DATA = {
 fake_data = lambda: _FAKE_DATA.copy()
 
 
+try:
+    db = Connection('mongodb://localhost')['_simplemongo_test']
+except:
+    # Not in a mongodb environment
+    db = None
+
+
 class ModelTest(unittest.TestCase):
 
     def setUp(self):
-        db = Connection('mongodb://localhost')['_simplemongo_test']
 
         class User(Document):
             col = db['user']
@@ -234,3 +240,8 @@ class ModelTest(unittest.TestCase):
         assert d['name'] == 'reorx reborn'
         assert d['age'] == 21
         assert d['magic']['spell'] == 111.11
+
+
+if not db:
+    # Skip test if not in mongodb environment
+    ModelTest.__name__ = '_ModelNotest'
