@@ -142,7 +142,6 @@ For fields defined in ``struct`` there are two extra
 attributes to configure validation conditions:
 
 1. ``required_fields``
-
    A field in ``required_fields`` is required to exist in the document, if not,
    a ``KeyError`` exception will be raised on validation.
 
