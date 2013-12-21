@@ -10,12 +10,12 @@ Simplemongo
 
 Inspired by `Mongokit <https://github.com/namlook/mongokit>`_, Simplemongo shares
 the same concept on designing the object oriented interface:
-using a predefined dict to restrict structure and value type of the document
-(mongoengine represents another genre, which use a django orm liked way to make
-simple things complicated). But the validation mechanism of Simplemongo are formulated
-to be more reasonable and explicit. Following the philosophy of why MongoDB was made,
-it provides the most scalability under the premise of simplicity, which let you
-think that you are still using pymongo and mongodb, not some restrained orm with
+using a predefined dict to restrict structure and value type of the document.
+( *mongoengine represents another genre, which use a rdbms way like django orm and that
+make simple things complicated* ) But the validation mechanism of Simplemongo are formulated
+to be more reasonable and explicit. Following the philosophy of how MongoDB was made to be,
+it provides the most scalability under the premise of simplicity, let you
+think that you are still using pymongo and MongoDB, not some restrained orm with
 many rules you must follow.
 
 The document is currently on development, feel free to check the code or test cases if you want to learn more.
@@ -26,7 +26,6 @@ Tutorial
 
 .. code:: python
 
-    from bson import ObjectId
     from simplemongo import Document
 
     # Simplemongo won't create the connection or choose the database for you,
@@ -42,7 +41,6 @@ Tutorial
 
         # Define the struct of the document
         struct = {
-            'id': ObjectId,
             'name'; str,
             'age': int,
             'attributes': {
@@ -53,7 +51,6 @@ Tutorial
         }
 
     user = User(
-        id=ObjectId(),
         name='reorx',
         age=21,
         attributes={
@@ -63,20 +60,43 @@ Tutorial
         }
     )
 
-    # The document will be validate according to ``struct`` before writing to database
+    # The document will be validated according to ``struct`` before writing to database
+    # An `_id` field will be added if not exist
     user.save()
+    print user['_id']
 
-    User.find(user.identifier)
+    # `user.identifier` returns {'_id': user['_id']} as the identifier of the document
+    # The arguments of Document's `find` method is just the same with `pymongo.Collection.find`
+    cursor = User.find(user.identifier)
 
-    User.one(user.identifier)
+    # `cursor` support all the ways `pymongo.Cursor` instance can be operated,
+    # instead of dict, it returns the instance of `User` class
+    print cursor.next()
 
+    # `one` process a find query and return the only result of the query,
+    # if no result, it returns `None`, if get multiple results, it raise a `MultipleObjectsReturned` exception
+    fetched_user = User.one(user.identifier)
+    print fetched_user['_id'] is user['_id']
+
+    # The document data of user object can and only be changed by d[key] operation,
+    # dot notation (user.name) is not supported, dict should act as dict does
     user['name'] = 'Reorx'
+
+    # `update` is just the dict update, it won't hit the database
     user.update(age=22)
 
-    user.update_changes()
-
+    # `update_doc` calls the `update` method of collection object,
+    # equals to: user.col.update(user.identifier, {'attributes.armor': 30})
     user.update_doc({'attributes.armor': 30})
 
+    # `update_changes` compares raw data with the changes we have made,
+    # then do a `update` operation on the original collection object,
+    # this line equals to:
+    # >>> user.col.update(user.identifier, {'$set': {'name': 'Reorx'}, '$inc': {'age': 1}})
+    user.update_changes()
+
+    # `remove` will remove a saved or fetched document from database,
+    # if the document is not written in database, an AssertErrro will be raised
     user.remove()
 
 
@@ -87,7 +107,6 @@ A detailed example
 
     class UserDict(StructuredDict):
         struct = {
-            'id': ObjectId,
             'name': str,
             'age': int,
             'attributes': {
@@ -113,12 +132,11 @@ A detailed example
         }
 
         required_fields = [
-            'id', 'name',
-            'attributes.vitality', 'attributes.armor',
+            'name', 'attributes.vitality', 'attributes.armor',
             'skills', 'skills.name', 'skills.damage'
         ]
 
-        strict_fields = ['id', 'slots', 'skills.damage', 'skills.level']
+        strict_fields = ['slots', 'skills.damage', 'skills.level']
 
 
 Mechanism

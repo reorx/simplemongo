@@ -140,6 +140,9 @@ class Document(StructuredDict):
         if self.__class__.__validate__:
             logging.debug('__validate__ is on')
             self.validate()
+        if not '_id' in self:
+            self['_id'] = ObjectId()
+            logging.debug('_id generated %s' % self['_id'])
         rv = self.col.save(self, **self._get_write_options(manipulate=True))
         logging.debug('ObjectId(%s) saved' % rv)
         self._in_db = True
