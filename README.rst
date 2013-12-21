@@ -142,6 +142,7 @@ For fields defined in ``struct`` there are two extra
 attributes to configure validation conditions:
 
 1. ``required_fields``
+
    A field in ``required_fields`` is required to exist in the document, if not,
    a ``KeyError`` exception will be raised on validation.
 
@@ -153,7 +154,7 @@ attributes to configure validation conditions:
 
 So there are 4 situations for a field (defined in ``struct`` firstly):
 
-1. not required and not strict (marked ``nr_ns`` in test code)
+1. **not required and not strict** (marked ``nr_ns`` in test code)
 
    it can be:
 
@@ -163,7 +164,7 @@ So there are 4 situations for a field (defined in ``struct`` firstly):
 
    - exist and value is None
 
-2. required and not strict (marked ``r_ns`` in test code)
+2. **required and not strict** (marked ``r_ns`` in test code)
 
    it can be:
 
@@ -171,7 +172,7 @@ So there are 4 situations for a field (defined in ``struct`` firstly):
 
    - exist and value is None
 
-3. not required and strict (marked ``nr_s`` in test code)
+3. **not required and strict** (marked ``nr_s`` in test code)
 
    it can be:
 
@@ -179,7 +180,7 @@ So there are 4 situations for a field (defined in ``struct`` firstly):
 
    - exist and value is instance of type
 
-4. required and strict (marked ``r_s`` in test code)
+4. **required and strict** (marked ``r_s`` in test code)
 
    it can only be:
 
