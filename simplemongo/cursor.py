@@ -6,7 +6,7 @@ from pymongo.cursor import Cursor
 
 class SimplemongoCursor(Cursor):
     def __init__(self, *args, **kwargs):
-        self.__wrapper = kwargs.pop('wrapper', None)
+        self.__wrapper = kwargs.pop('wrapper')
 
         super(SimplemongoCursor, self).__init__(*args, **kwargs)
 
@@ -25,16 +25,13 @@ class SimplemongoCursor(Cursor):
         # Directly call pymongo Cursor's `next` method
         raw = super(SimplemongoCursor, self).next()
 
-        if self.__wrapper:
-            return self.__wrapper(raw, from_db=True)
-        else:
-            return raw
+        return self.__wrapper(raw, from_db=True)
 
     def __getitem__(self, index):
         rv = super(SimplemongoCursor, self).__getitem__(index)
 
         # `rv` could be `self` or document dict
-        if self.__wrapper and isinstance(rv, dict):
+        if isinstance(rv, dict):
             return self.__wrapper(rv, from_db=True)
         else:
             return rv
