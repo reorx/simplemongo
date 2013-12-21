@@ -24,7 +24,7 @@ The document is currently on development, feel free to check the code or test ca
 Tutorial
 --------
 
-::
+.. code:: python
 
     from bson import ObjectId
     from simplemongo import Document
@@ -83,7 +83,7 @@ Tutorial
 A detailed example
 ------------------
 
-::
+.. code:: python
 
     class UserDict(StructuredDict):
         struct = {
