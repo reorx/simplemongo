@@ -25,6 +25,10 @@ class SimplemongoCursor(Cursor):
         # Directly call pymongo Cursor's `next` method
         raw = super(SimplemongoCursor, self).next()
 
+        # Just in case
+        if raw is None:
+            return None
+
         return self.__wrapper(raw, from_db=True)
 
     def __getitem__(self, index):

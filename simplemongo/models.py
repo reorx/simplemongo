@@ -89,7 +89,7 @@ class Document(StructuredDict):
     Usage:
     1. create new document
     >>> class ADoc(Document):
-    ...     col = mongodb['dbtest']['coltest']
+    ...     col = db['dbtest']['coltest']
     ...
 
     2. init from existing document
@@ -112,14 +112,31 @@ class Document(StructuredDict):
 
         NOTE *initialize without validation*
         """
-        if raw is None:
-            super(Document, self).__init__()
-        else:
-            # Use deepcopy to isolate raw and Document itself
-            super(Document, self).__init__(copy.deepcopy(raw))
-        self._raw = raw
-
         self._in_db = from_db
+
+        if raw is None:
+            assert self._in_db is False
+            super(Document, self).__init__()
+            self._raw = None
+        else:
+            if self._in_db:
+                # Use deepcopy to isolate raw and Document itself
+                super(Document, self).__init__(copy.deepcopy(raw))
+                self._raw = raw
+            else:
+                super(Document, self).__init__(raw)
+                self._raw = None
+
+        # A document instance can be get in 3 ways:
+        # 1. Document(raw)
+        #    No _id unless passed in parameters or save
+        #    No self._raw until/unless save
+        # 2. Document.new(**raw)
+        #    Has _id auto created
+        #    No self._raw until/unless save
+        # 3. Document.find() <=> Document(raw, True)
+        #    Has _id
+        #    Has self._raw
 
     def __str__(self):
         return '<Document: %s >' % dict(self)
@@ -140,9 +157,14 @@ class Document(StructuredDict):
         if self.__class__.__validate__:
             logging.debug('__validate__ is on')
             self.validate()
+
         if not '_id' in self:
             self['_id'] = ObjectId()
             logging.debug('_id generated %s' % self['_id'])
+
+        if self._raw is None:
+            self._raw = copy.deepcopy(dict(self))
+
         rv = self.col.save(self, **self._get_write_options(manipulate=True))
         logging.debug('ObjectId(%s) saved' % rv)
         self._in_db = True
@@ -157,9 +179,12 @@ class Document(StructuredDict):
         self.clear()
         self._in_db = False
 
-    def update_doc(self, spec, **kwargs):
+    def update_self(self, spec, **kwargs):
+        options = self._get_write_options(**kwargs)
+        # Make sure `multi` is False
+        options['multi'] = False
         rv = self.col.update(
-            self.identifier, spec, **self._get_write_options(**kwargs))
+            self.identifier, spec, **options)
         return rv
 
     @property
@@ -191,8 +216,11 @@ class Document(StructuredDict):
 
     def update_changes(self, **kwargs):
         c = self.changes
-        logging.debug('update changes: %s', c)
-        self.update_doc(c, **kwargs)
+        if c:
+            logging.debug('update changes: %s', c)
+            self.update_self(c, **kwargs)
+        else:
+            logging.debug('no changes to update')
 
     def pull(self):
         """Update document from database
@@ -204,6 +232,10 @@ class Document(StructuredDict):
             raise errors.SimplemongoException('Document was deleted before `pull` was called')
         self.clear()
         self.update(doc)
+
+    @classmethod
+    def insert(cls, *args, **kwargs):
+        pass
 
     @classmethod
     def new(cls, **kwargs):
