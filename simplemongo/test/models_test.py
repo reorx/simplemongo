@@ -198,6 +198,8 @@ class ModelTest(unittest.TestCase):
 
     def test_changes(self):
         u = self.get_new()
+        u.save()
+
         print u
         u['name'] = 'reorx reborn'
         u['age'] = 21
@@ -220,7 +222,7 @@ class ModelTest(unittest.TestCase):
             '$unset': ['is_choosen']
         }
         _c = u.changes
-        # print _c
+        assert _c
         for k in c:
             print c[k], _c[k]
             assert c[k] == _c[k]

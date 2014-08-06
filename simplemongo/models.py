@@ -239,7 +239,7 @@ class Document(StructuredDict):
 
     @classmethod
     def new(cls, **kwargs):
-        """
+        """Create a new model instance, with _id generated,
         initialize by structure of self.struct
         """
         if not '_id' in kwargs:
