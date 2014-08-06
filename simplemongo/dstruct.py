@@ -43,6 +43,17 @@ ALLOW_TYPES = [
 ]
 
 
+def get_typ(st):
+    if st in ALLOW_TYPES:
+        if st in (str, unicode):
+            return (str, unicode)
+        else:
+            return st
+    else:
+        # list or dict
+        return type(st)
+
+
 def check_struct(struct):
     """
     ensure every key in struct is of str type
@@ -203,11 +214,12 @@ def validate_dict(doc, struct, required_fields=None, strict_fields=None):
                     nr.append(i[len(k) + 1:])
             return nr
 
-        if st in ALLOW_TYPES:
-            typ = st
-        else:
-            # list or dict
-            typ = type(st)
+        typ = get_typ(st)
+        # if st in ALLOW_TYPES:
+        #     typ = st
+        # else:
+        #     # list or dict
+        #     typ = type(st)
         logger.debug(
             '@ %s\ndefined: %s\nobj   : %s %s\nrequired: %s',
             ck, typ, type(o), o, local_required_current)
