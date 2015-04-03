@@ -245,5 +245,10 @@ class ModelTest(unittest.TestCase):
 
 
 if not db:
+    from nose.util import log
+
     # Skip test if not in mongodb environment
     ModelTest.__name__ = '_ModelNotest'
+    text = "models_test.py: no mongodb was found on localhost's default port, skip tests"
+    sep = '\n' + len(text) * '=' + '\n'
+    log.warn(sep + text + sep)
