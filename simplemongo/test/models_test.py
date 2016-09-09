@@ -3,7 +3,7 @@
 
 import unittest
 from nose.tools import assert_raises
-from pymongo import Connection
+from pymongo import MongoClient
 from simplemongo.models import Document, ObjectId
 from simplemongo.errors import ObjectNotFound, MultipleObjectsReturned, StructError
 
@@ -29,7 +29,7 @@ fake_data = lambda: _FAKE_DATA.copy()
 
 
 try:
-    db = Connection('mongodb://localhost')['_simplemongo_test']
+    db = MongoClient('mongodb://localhost')['_simplemongo_test']
 except:
     # Not in a mongodb environment
     db = None

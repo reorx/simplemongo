@@ -31,7 +31,7 @@ Tutorial
 
     # Simplemongo won't create the connection or choose the database for you,
     # you must explicitly get you database object yourself
-    db = pymongo.Connection()['mydatabase']
+    db = pymongo.MongoClient()['mydatabase']
 
 
     class User(Document):

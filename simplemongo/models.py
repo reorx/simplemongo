@@ -23,7 +23,7 @@ def oid(id):
             id = id.encode('utf8')
         return ObjectId(id)
     else:
-        raise ValueError('get type %s, should str\unicode or ObjectId' % type(id))
+        raise ValueError('get type %s, should be str/unicode or ObjectId' % type(id))
 
 
 class DocumentMetaclass(StructuredDictMetaclass):
@@ -40,7 +40,7 @@ class DocumentMetaclass(StructuredDictMetaclass):
         if not (len(bases) == 1 and bases[0] is StructuredDict):
 
             # check collection
-            if not 'col' in attrs:
+            if 'col' not in attrs:
                 raise errors.StructError('`col` attribute should be assigned for Document subclass')
             if not isinstance(attrs['col'], Collection):
                 raise errors.StructError(
@@ -158,7 +158,7 @@ class Document(StructuredDict):
             logging.debug('__validate__ is on')
             self.validate()
 
-        if not '_id' in self:
+        if '_id' not in self:
             self['_id'] = ObjectId()
             logging.debug('_id generated %s' % self['_id'])
 
@@ -242,7 +242,7 @@ class Document(StructuredDict):
         """Create a new model instance, with _id generated,
         initialize by structure of self.struct
         """
-        if not '_id' in kwargs:
+        if '_id' not in kwargs:
             kwargs['_id'] = ObjectId()
             logging.debug('_id generated %s' % kwargs['_id'])
         instance = cls.build_instance(**kwargs)
@@ -250,17 +250,6 @@ class Document(StructuredDict):
 
     @classmethod
     def find(cls, *args, **kwargs):
-        # Copy from ``find`` in pymongo==2.6, this method should be mostly the same as it
-        if not 'slave_okay' in kwargs:
-            kwargs['slave_okay'] = cls.col.slave_okay
-        if not 'read_preference' in kwargs:
-            kwargs['read_preference'] = cls.col.read_preference
-        if not 'tag_sets' in kwargs:
-            kwargs['tag_sets'] = cls.col.tag_sets
-        if not 'secondary_acceptable_latency_ms' in kwargs:
-            kwargs['secondary_acceptable_latency_ms'] = (
-                cls.col.secondary_acceptable_latency_ms)
-
         logging.debug('find: %s, %s', args, kwargs)
         kwargs['wrapper'] = cls
         cursor = SimplemongoCursor(cls.col, *args, **kwargs)
